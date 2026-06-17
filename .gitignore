@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+
+# Virtual env
+venv/
+env/
+.venv/
+
+# Model weights / large binaries (download separately per README)
+*.pt
+*.pth
+*.safetensors
+*.onnx
+*.bin
+*.ckpt
+# Keep Q16 prompts though (tiny, included for convenience)
+!checkpoints/q16/prompts.p
+
+# Reference image directories (download from I2P per README)
+datasets/i2p_sexual/
+datasets/i2p_violence/
+
+# Experiment outputs / logs
+results/
+logs/
+output_vis_samplings/
+*.log
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+*.swp
