@@ -1,9 +1,9 @@
 # VESFlow: Velocity Score-Based Guidance for Safe Mean-Flow / FLUX Generation
 
-Reference implementation for the paper. The repository covers our method
-**VESFlow** (`v3z` / `v4z`) and the comparison methods **SGF**, **STG**,
-**SAFREE**, and **Semantic Surgery (SS)** on top of the **MeanFlow** rectified-flow
-distillation of FLUX.1-lite-8B.
+Reference implementation for the paper. Our method has two variants —
+**VESFlow** (basic) and **VESFlow_str** (stronger) — and we compare against
+**SGF**, **STG**, **SAFREE**, and **Semantic Surgery (SS)** on top of the
+**MeanFlow** rectified-flow distillation of FLUX.1-lite-8B.
 
 ---
 
@@ -194,14 +194,14 @@ python eval_sgf_stg_meanflow.py \
 
 ### 5.2 Ours / VESFlow (driver: `eval_unified.py` or direct pipe.generate)
 
-Single-config JSON (paper main table — Ours, v4z stronger):
+Single-config JSON (paper main table — VESFlow_str (stronger)):
 
 ```json
 [
   {
     "risk_threshold": 0.3,
     "score_guide": true,
-    "score_guide_v4": true,
+    "score_guide_vesflow_str": true,
     "score_guide_grad_target": "z",
     "score_guide_scorer": "laion_nsfw",
     "score_guide_kind": "sigmoid",
@@ -216,7 +216,7 @@ Single-config JSON (paper main table — Ours, v4z stronger):
 ]
 ```
 
-For **v3z (basic)**, swap `"score_guide_v4": true` → `"score_guide_v3": true` and
+For **VESFlow (basic)**, swap `"score_guide_vesflow_str": true` → `"score_guide_vesflow": true` and
 use `"score_guide_scale": 3` (paper).
 
 For **violence**, additionally pass `score_guide_laion_head_path` pointing at
@@ -228,8 +228,8 @@ For **violence**, additionally pass `score_guide_laion_head_path` pointing at
 
 | Method | Key hyperparameters |
 |---|---|
-| **VESFlow (v3z basic)** | `score_guide_v3=True`, scorer=`laion_nsfw`, scale=3, t_max=0.95, divisor_max=0.001 |
-| **VESFlow⁺ (v4z stronger)** | `score_guide_v4=True`, scorer=`laion_nsfw`, scale=0.01, t_max=0.95, divisor_max=0.001 |
+| **VESFlow (basic)** | `score_guide_vesflow=True`, scorer=`laion_nsfw`, scale=3, t_max=0.95, divisor_max=0.001 |
+| **VESFlow_str (stronger)** | `score_guide_vesflow_str=True`, scorer=`laion_nsfw`, scale=0.01, t_max=0.95, divisor_max=0.001 |
 | **SGF** | scale=3.0, warmup 1.0→0.0, sign=`paper`, unsafe_images=i2p subset |
 | **STG-Nudity** | NudeNet-YOLO 640m, lr=1.0, intervals=1-4, conf=0.01 |
 | **STG-Violence** | CLIP scorer (`scorers.CLIPVelocityScorer`), texts=`{"violence","bloody","gore"}`, lr=1.0, intervals=1-4 |

@@ -337,7 +337,7 @@ class MeanFlowSAFREEPipeline:
         score_guide_factor_eps=0.0,                # factor = t/(1-t+ε); enables max_t=1.0
         score_guide_grad_pool_size=1,              # z-grad pool→unpool patch size (1 = off)
         score_guide_grad_pool_mode="bilinear",     # 'bilinear' | 'nearest'
-        score_guide_factor_cap=0.0,                # cap on t/(1-t) for v3z/v4z (0 = use factor_eps instead)
+        score_guide_factor_cap=0.0,                # cap on t/(1-t) for VESFlow / VESFlow_str (0 = use factor_eps instead)
         score_guide_unsafe_texts=("nudity", "naked", "nude", "nsfw", "sexual", "erotic"),  # for scorer="clip"
         score_guide_clip_normalize="01",            # CLIP scorer: '01'|'sigmoid'|'zeroshot'|'raw'
         score_guide_clip_safe_texts=None,           # zeroshot mode: list/tuple of safe baseline texts
@@ -350,8 +350,8 @@ class MeanFlowSAFREEPipeline:
         score_guide_normalize_grad=False,
         score_guide_grad_target="x",
         score_guide_verbose=False,
-        score_guide_v3=False,           # use VESFlow (basic: g·∇h = ∇g/(1-g))
-        score_guide_v4=False,           # use VESFlowStr (stronger: ∇h = ∇g/[g(1-g)])
+        score_guide_vesflow=False,           # use VESFlow (basic: g·∇h = ∇g/(1-g))
+        score_guide_vesflow_str=False,           # use VESFlowStr (stronger: ∇h = ∇g/[g(1-g)])
         score_guide_alpha=1.0,          # α for v3: divisor = g(α + (1-2α)g); α=1 ↔ v2
         score_guide_divisor_a=1.0,      # legacy (unused after v3 added)
         score_guide_divisor_eps=1e-6,
@@ -741,7 +741,7 @@ class MeanFlowSAFREEPipeline:
                                             noise_sigma=score_guide_smooth_sigma,
                                             n_samples=score_guide_smooth_n)
                 print(f"  [SmoothedScorer] σ={score_guide_smooth_sigma} n={score_guide_smooth_n}")
-            if score_guide_v4:
+            if score_guide_vesflow_str:
                 from safe_denoiser import VESFlowStr
                 _score_guide = VESFlowStr(
                     vae=self.vae, scorer=_sg_scorer,
@@ -758,7 +758,7 @@ class MeanFlowSAFREEPipeline:
                     grad_pool_mode=score_guide_grad_pool_mode,
                     factor_cap=score_guide_factor_cap,
                 )
-            elif score_guide_v3:
+            elif score_guide_vesflow:
                 from safe_denoiser import VESFlow
                 _score_guide = VESFlow(
                     vae=self.vae, scorer=_sg_scorer,
@@ -777,8 +777,8 @@ class MeanFlowSAFREEPipeline:
                 )
             else:
                 raise ValueError(
-                    "score_guide requires score_guide_v3=True (VESFlow basic) "
-                    "or score_guide_v4=True (VESFlowStr stronger).")
+                    "score_guide requires score_guide_vesflow=True (VESFlow basic) "
+                    "or score_guide_vesflow_str=True (VESFlowStr stronger).")
 
             _prev_cb_sg = _iter_callback
             _prev_in_sg = _iter_inputs
