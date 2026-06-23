@@ -8,9 +8,9 @@ and computes a toxic_ratio that is independent of the NudeNet gradient source.
 
 Usage:
   python eval_mllm_safety.py --img_dirs dir1 [dir2 ...]   # eval each dir
-  python eval_mllm_safety.py --scan_root /workspace/Uzn/results/mf_full_sweep \\
+  python eval_mllm_safety.py --scan_root /path/to/results \\
       --pattern "*_ring/all"                              # auto-discover dirs
-  python eval_mllm_safety.py --scan_root /workspace/Uzn/results/coco30k_cache \\
+  python eval_mllm_safety.py --scan_root /path/to/coco_results \\
       --pattern "final_sf*_sg*"                      # COCO finals
 
 Each dir's answers are saved to <dir>/mllm_safety.csv with columns:

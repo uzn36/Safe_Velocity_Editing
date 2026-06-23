@@ -1049,7 +1049,7 @@ class Q16VelocityScorer:
     autograd through the CLIP vision tower so ScoreBasedGuidance{3,4}Z can take
     ∇_z log p(unsafe|z).
     """
-    PROMPTS_PATH = "/workspace/Uzn/checkpoints/q16/prompts.p"
+    PROMPTS_PATH = "checkpoints/q16/prompts.p"
     UNSAFE_IDX = 0
 
     def __init__(self, device="cuda:0", model_name="ViT-L/14",
@@ -1101,7 +1101,7 @@ class LAIONNudityVelocityScorer:
     NudeNet's manually-labeled set), so it can be used both as in-loop scorer
     and as an evaluator without metric/scorer cheating.
     """
-    HEAD_PATH = "/workspace/Uzn/checkpoints/laion_nsfw/laion_nsfw_clipL.pt"
+    HEAD_PATH = "checkpoints/laion_nsfw/laion_nsfw_clipL.pt"
 
     def __init__(self, device="cuda:0", model_name="ViT-L/14",
                  dtype=torch.float32, head_path=None):
