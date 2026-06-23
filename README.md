@@ -1,9 +1,10 @@
 # VESFlow: Safe Few-Step Generation via Velocity Editing
 
-Reference implementation for the paper. Our method has two variants —
-**VESFlow** (basic) and **VESFlow_str** (stronger) — and we compare against
-**SGF**, **STG**, **SAFREE**, and **Semantic Surgery (SS)** on top of the
-**MeanFlow** rectified-flow distillation of FLUX.1-lite-8B.
+Reference implementation for the paper. We propose **VESFlow**, a training-free
+safety method tailored to few-step flow-matching text-to-image models, with
+two variants: **VESFlow** (basic) and **VESFlow+** (stronger). We evaluate on
+both **FLUX.1-lite-8B** (8 sampling steps) and the **MeanFlow** distillation
+of FLUX (4 sampling steps).
 
 ---
 
@@ -17,18 +18,13 @@ VESFlow/
 │   ├── attn_processor.py
 │   └── utils.py
 │
-├── sample_meanflow_safree.py     # main pipeline (VESFlow + SGF + STG + SAFREE + SS)
-│
-├── safe_denoiser.py              # VESFlow / VESFlowStr + scorer classes
-├── sgf_stg_meanflow.py           # SGFMeanFlow + STGMeanFlow
-├── embedding_modifier.py         # SAFREE + Semantic Surgery (prompt-embedding modifiers)
+├── sample_meanflow_safree.py     # main pipeline; pipe.generate(...) hosts VESFlow guidance
+├── safe_denoiser.py              # VESFlow / VESFlowStr classes + in-loop scorer classes
 ├── scorers.py                    # standalone Q16 / LAION-NSFW scorers
 │
-├── eval_sgf_stg_meanflow.py      # driver: SGF/STG/SAFREE/base
-├── eval_meanflow_sgf_full.py     # full sweep driver (RAB + COCO + FID)
-├── eval_metrics.py               # CLIPScore + FID
-├── eval_q16_asr_tr.py            # Q16 (violence/inappropriate) evaluator
-├── eval_mllm_safety.py           # LLaVA-1.5 cross-eval (yes/no)
+├── eval_q16_asr_tr.py            # Q16 (violence) ASR / TR evaluator
+├── eval_mllm_safety.py           # LLaVA-1.5 yes/no cross-evaluator
+├── eval_metrics.py               # CLIPScore + FID helper
 │
 ├── checkpoints/
 │   └── q16/prompts.p             # Q16 soft prompts (Schramowski et al. 2022)
@@ -43,6 +39,11 @@ VESFlow/
 └── README.md
 ```
 
+The repository also contains comparison-method modules (`sgf_stg_meanflow.py`,
+`embedding_modifier.py`, `eval_sgf_stg_meanflow.py`, `eval_meanflow_sgf_full.py`)
+that are kept for completeness so that the paper's main table can be
+reproduced; they are not required to run VESFlow itself.
+
 ---
 
 ## 2 · Setup
@@ -52,8 +53,7 @@ VESFlow/
 pip install torch torchvision
 pip install diffusers transformers accelerate
 pip install pandas pillow ftfy regex onnxruntime
-pip install ultralytics                              # for STG NudeNet-YOLO
-pip install git+https://github.com/openai/CLIP.git   # provides `clip` package
+pip install git+https://github.com/openai/CLIP.git   # provides the `clip` package
 pip install cleanfid                                 # for FID
 ```
 
@@ -68,7 +68,7 @@ Other Hugging Face models lazily loaded as needed:
 
 | Model | Required for |
 |---|---|
-| `openai/clip-vit-large-patch14` | CLIPVelocityScorer / Q16 / LAION-NSFW |
+| `openai/clip-vit-large-patch14` | LAION-NSFW / Q16 in-loop scorers |
 | `llava-hf/llava-1.5-7b-hf` | `eval_mllm_safety.py` cross-eval |
 
 ---
@@ -77,161 +77,131 @@ Other Hugging Face models lazily loaded as needed:
 
 Place these under `VESFlow/checkpoints/` (paths can be overridden via CLI).
 
-### Required for Ours / VESFlow (nudity)
+### Required for VESFlow (nudity)
 
 * **LAION-NSFW head** (`laion_nsfw_clipL.pt`, ~9 MB) — paired with CLIP-L/14:
-  source <https://github.com/LAION-AI/CLIP-based-NSFW-Detector>
-  Path used by default: `checkpoints/laion_nsfw/laion_nsfw_clipL.pt`
+  source <https://github.com/LAION-AI/CLIP-based-NSFW-Detector>.
+  Path used by default: `checkpoints/laion_nsfw/laion_nsfw_clipL.pt`.
 
-### Required for Ours / VESFlow (violence)
+### Required for VESFlow (violence)
 
 * **Graphic-harm head** (`laion_trained_graphicharm_clipL.pt`) — our trained
-  head (pos = violence + shocking + self-harm, neg = sexual + hate +
-  harassment + illegal), CLIP-L/14 features → 4-layer MLP → sigmoid.
-  Release link: TODO.
-  Pass to scorer via `--score_guide_laion_head_path`.
-
-### Required for STG (in-loop NudeNet YOLO detector)
-
-* **NudeNet-v3.4 640m YOLO** (`nudenet_640m.pt`) — used by STG-Nudity:
-  source <https://github.com/notAI-tech/NudeNet>
-  Path used by default: `checkpoints/nudenet/nudenet_640m.pt`
+  head following the LAION architecture (CLIP-L/14 features → 4-layer MLP →
+  sigmoid). Trained on I2P: positive = {violence, self-harm, shocking},
+  negative = remaining categories. Release link: TODO.
+  Pass to scorer via `score_guide_laion_head_path`.
 
 ### Required for evaluation
 
 * **SAFREE binary NudeNet classifier** (`nudenet_classifier_model.onnx`) —
-  the binary nude/safe ONNX classifier used by SAFREE for evaluation:
-  source <https://github.com/jaehong31/SAFREE>
-  Pass via `--nudenet_path`.
+  the binary nude/safe ONNX classifier used as the **independent NudeNet
+  evaluator** (separate from the LAION in-loop scorer):
+  source <https://github.com/jaehong31/SAFREE>.
 
-### Required for SGF (paper-faithful reference images)
+### Optional
 
-I2P "sexual" subset for SGF-nudity, I2P "violence" subset for SGF-violence:
-
-```bash
-# Inverse-Prompt I2P from https://huggingface.co/datasets/AIML-TUDA/i2p
-# Filter per category:
-python -c "
-import pandas as pd
-df = pd.read_csv('datasets/i2p.csv')
-df[df['categories'].fillna('').str.contains('sexual', case=False)].to_csv('datasets/i2p_sexual.csv', index=False)
-df[df['categories'].fillna('').str.contains('violence', case=False)].to_csv('datasets/i2p_violence.csv', index=False)
-"
-# Then generate reference images for each filter set with a base SD1.5/SDXL
----
-
-## 4 · Running the methods
-
-All methods share `--seed 42`, `--steps 4`, `--guidance_scale 3.5` (MeanFlow defaults).
-
-### 4.1 Baseline / SAFREE / SGF / STG (driver: `eval_sgf_stg_meanflow.py`)
-
-```bash
-# Baseline (no method)
-python eval_sgf_stg_meanflow.py \
-  --method base \
-  --dataset_name ring-a-bell --csv datasets/nudity-ring-a-bell.csv \
-  --steps 4 --guidance_scale 3.5 --seed 42 \
-  --metrics nudenet clip \
-  --nudenet_path /path/to/nudenet_classifier_model.onnx \
-  --save_path results/base
-
-# SGF (paper-faithful — pass these flags explicitly, defaults are weaker)
-python eval_sgf_stg_meanflow.py \
-  --method sgf \
-  --unsafe_images datasets/i2p_sexual \
-  --sd_scale 3.0 --sd_warmup_start 1.0 --sd_warmup_end 0.0 --sgf_sign paper \
-  --dataset_name ring-a-bell --csv datasets/nudity-ring-a-bell.csv \
-  --steps 4 --guidance_scale 3.5 --seed 42 \
-  --metrics nudenet clip \
-  --nudenet_path /path/to/nudenet_classifier_model.onnx \
-  --save_path results/sgf
-
-# STG (paper-faithful for nudity)
-python eval_sgf_stg_meanflow.py \
-  --method stg \
-  --stg_nudenet_path checkpoints/nudenet/nudenet_640m.pt \
-  --stg_lr 1.0 --stg_update_intervals 1-4 --stg_unsafe_conf 0.01 \
-  --dataset_name ring-a-bell --csv datasets/nudity-ring-a-bell.csv \
-  --metrics nudenet clip \
-  --nudenet_path /path/to/nudenet_classifier_model.onnx \
-  --save_path results/stg
-
-# SAFREE-only
-python eval_sgf_stg_meanflow.py \
-  --method safree --safree_version safree --safree_alpha 0.01 \
-  --dataset_name ring-a-bell --csv datasets/nudity-ring-a-bell.csv \
-  --metrics nudenet clip \
-  --nudenet_path /path/to/nudenet_classifier_model.onnx \
-  --save_path results/safree
-
-# Add SS to any: pass `--ss_version orig`
-# Add SAFREE to any: pass `--safree_version safree`
-```
-
-### 5.2 Ours / VESFlow (driver: `eval_unified.py` or direct pipe.generate)
-
-Single-config JSON (paper main table — VESFlow_str (stronger)):
-
-```json
-[
-  {
-    "risk_threshold": 0.3,
-    "score_guide": true,
-    "score_guide_vesflow_str": true,
-    "score_guide_grad_target": "z",
-    "score_guide_scorer": "laion_nsfw",
-    "score_guide_kind": "sigmoid",
-    "score_guide_min_t": 0.01,
-    "score_guide_max_t": 0.95,
-    "score_guide_factor_eps": 0.0,
-    "score_guide_skip_first_step": false,
-    "score_guide_divisor_max": 0.001,
-    "score_guide_scale": 0.01,
-    "safree": "none"
-  }
-]
-```
-
-For **VESFlow (basic)**, swap `"score_guide_vesflow_str": true` → `"score_guide_vesflow": true` and
-use `"score_guide_scale": 3` (paper).
-
-For **violence**, additionally pass `score_guide_laion_head_path` pointing at
-`laion_trained_graphicharm_clipL.pt`.
+* `checkpoints/q16/prompts.p` (included — small file, shape `(2, 768)`) — for
+  Q16-based scoring / evaluation.
 
 ---
 
-## 5 · Method config cheat sheet (paper main table — MeanFlow 4-step)
+## 4 · Benchmarks
 
-| Method | Key hyperparameters |
+| CSV | Concept | Evaluator | n |
+|---|---|---|---|
+| `nudity-ring-a-bell.csv` | Nudity (RAB adversarial) | NudeNet binary classifier | 79 |
+| `nudity.csv` | Nudity (original RAB targets) | NudeNet | 79 |
+| `mma-diffusion-nsfw-adv-prompts.csv` | Nudity (MMA-Diffusion stealth attack) | NudeNet | first 400 used |
+| `violence-ring-a-bell.csv` | Violence (RAB adversarial) | Q16 inappropriate | 250 |
+| `i2p.csv` | I2P 10 categories | reference only (no eval) | — |
+
+MS-COCO is used for benign-prompt quality (FID + CLIPScore); we follow the
+10K subset convention of the paper.
+
+---
+
+## 5 · Running VESFlow
+
+All runs use `--seed 42`, `--guidance_scale 3.5`; FLUX with 8 steps and
+MeanFlow with 4 steps.
+
+### Minimal example (Python)
+
+```python
+import torch
+from sample_meanflow_safree import MeanFlowSAFREEPipeline
+
+pipe = MeanFlowSAFREEPipeline(
+    text_encoder_device="cuda:1",
+    transformer_device="cuda:0",
+    vae_device="cuda:1",
+)
+
+gen = torch.Generator(device="cuda:0").manual_seed(42)
+
+# VESFlow+ (stronger) — paper main-table MeanFlow nudity config
+img = pipe.generate(
+    prompt="...",
+    height=512, width=512,
+    num_inference_steps=4, guidance_scale=3.5, generator=gen,
+    # VESFlow score guidance
+    score_guide=True,
+    score_guide_vesflow_str=True,        # set score_guide_vesflow=True for VESFlow (basic)
+    score_guide_scorer="laion_nsfw",     # LAION CLIP-NSFW head
+    score_guide_kind="sigmoid",
+    score_guide_min_t=0.01,
+    score_guide_max_t=0.95,              # stability cap on t/(1-t)
+    score_guide_factor_eps=0.0,
+    score_guide_divisor_max=0.001,       # divisor cap on g(1-g) for VESFlow+
+    score_guide_skip_first_step=False,
+    score_guide_scale=0.01,              # VESFlow+ default; use 3.0 for VESFlow (basic)
+    # Risk-score filtering: bypass guidance for benign prompts
+    risk_threshold=0.3,
+    unsafe_concepts=["nudity", "naked", "nude"],
+)
+img.save("out.png")
+```
+
+For **violence**, additionally pass
+`score_guide_laion_head_path="path/to/laion_trained_graphicharm_clipL.pt"` and
+violence-related `unsafe_concepts`, e.g. `["violence", "bloody", "gore"]`. All
+other hyperparameters stay the same — no category-specific tuning.
+
+For **FLUX (8 steps)**, set `num_inference_steps=8` and use the FLUX-paired
+backbone setup; VESFlow guidance parameters are unchanged.
+
+---
+
+## 6 · Method config cheat sheet (paper main table)
+
+| Variant | Hyperparameters |
 |---|---|
-| **VESFlow (basic)** | `score_guide_vesflow=True`, scorer=`laion_nsfw`, scale=3, t_max=0.95, divisor_max=0.001 |
-| **VESFlow_str (stronger)** | `score_guide_vesflow_str=True`, scorer=`laion_nsfw`, scale=0.01, t_max=0.95, divisor_max=0.001 |
-| **SGF** | scale=3.0, warmup 1.0→0.0, sign=`paper`, unsafe_images=i2p subset |
-| **STG-Nudity** | NudeNet-YOLO 640m, lr=1.0, intervals=1-4, conf=0.01 |
-| **STG-Violence** | CLIP scorer (`scorers.CLIPVelocityScorer`), texts=`{"violence","bloody","gore"}`, lr=1.0, intervals=1-4 |
-| **SAFREE** | `safree_version="safree"`, alpha=0.01 |
-| **Semantic Surgery** | `ss_version="orig"`, gamma=0.02, beta=-0.06, alpha_threshold=0.5 |
+| **VESFlow** (basic) | `score_guide_vesflow=True`, scorer = `laion_nsfw`, scale = 3, t_max = 0.95, divisor_max = 0.001 |
+| **VESFlow+** (stronger) | `score_guide_vesflow_str=True`, scorer = `laion_nsfw`, scale = 0.01, t_max = 0.95, divisor_max = 0.001 |
+| Risk filter | `risk_threshold=0.3` (CLIP cos-sim against unsafe-concept words); set 0.0 to apply VESFlow unconditionally |
 
-`risk_threshold=0.3` gates Ours-style score guidance to risky prompts only
-(set 0.0 to apply unconditionally).
+Hyperparameter ranges searched in the paper:
+* λ (`score_guide_scale`) for VESFlow: {0.1, 0.3, 0.5, 1.0, 3.0}
+* λ for VESFlow+: {0.01, 0.03, 0.05, 0.1} (smaller because the
+  `1/(1−g(x̄))` factor inflates the gradient magnitude)
+* `t_max` ∈ {0.95, 0.99}
 
 ---
 
-## 6 · Evaluation utilities
+## 7 · Evaluation utilities
 
 ```bash
-# Q16 inappropriate (violence/gore) ASR & TR on a directory of PNGs
-python eval_q16_asr_tr.py results/my_method  \
+# Q16 inappropriate (violence / gore) ASR & TR on a directory of PNGs
+python eval_q16_asr_tr.py results/my_method \
     --threshold 0.6 --prompt_path checkpoints/q16/prompts.p
 
-# MLLM (LLaVA-1.5-7B) yes/no cross-eval
+# MLLM (LLaVA-1.5-7B) yes/no cross-eval (independent from the in-loop scorer)
 python eval_mllm_safety.py --img_dirs results/method_A results/method_B \
     --device cuda:0
 ```
 
-NudeNet ASR/TR is computed inline by `eval_sgf_stg_meanflow.py` when
-`--metrics nudenet clip` is requested.
+NudeNet ASR / TR can be computed from the same image directories using the
+SAFREE binary classifier (see § 3 for the checkpoint).
 
 ---
 
@@ -239,7 +209,7 @@ NudeNet ASR/TR is computed inline by `eval_sgf_stg_meanflow.py` when
 
 ```bibtex
 @misc{choi2026vesflow,
-  title         = {VESFlow: Safe Few-Step Generation via Velocity Editing},
+  title         = {Safe Few-Step Generation via Velocity Editing},
   author        = {Yujin Choi and Jaehong Yoon},
   year          = {2026},
   eprint        = {2606.23267},
