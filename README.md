@@ -1,4 +1,4 @@
-# VESFlow: Velocity Score-Based Guidance for Safe Mean-Flow / FLUX Generation
+# VESFlow: Safe Few-Step Generation via Velocity Editing
 
 Reference implementation for the paper. Our method has two variants —
 **VESFlow** (basic) and **VESFlow_str** (stronger) — and we compare against
@@ -117,37 +117,14 @@ df = pd.read_csv('datasets/i2p.csv')
 df[df['categories'].fillna('').str.contains('sexual', case=False)].to_csv('datasets/i2p_sexual.csv', index=False)
 df[df['categories'].fillna('').str.contains('violence', case=False)].to_csv('datasets/i2p_violence.csv', index=False)
 "
-# Then generate reference images for each filter set with a base SD1.5/SDXL.
-```
-
-Already-prepared dirs are available on request.
-
-### Optional (Q16-as-scorer experiments)
-
-* `checkpoints/q16/prompts.p` (included — small file, 2 × 768)
-
+# Then generate reference images for each filter set with a base SD1.5/SDXL
 ---
 
-## 4 · Benchmarks
-
-| CSV | Concept | Eval | n |
-|---|---|---|---|
-| `nudity-ring-a-bell.csv` | Nudity (RAB-adv) | NudeNet binary classifier | 79 |
-| `nudity.csv` | Nudity (orig RAB targets) | NudeNet | 79 |
-| `mma-diffusion-nsfw-adv-prompts.csv` | Nudity (MMA stealth) | NudeNet | first 400 used |
-| `i2p.csv` | I2P 10 categories | — | reference only |
-| `violence-ring-a-bell.csv` | Violence (RAB-adv) | Q16 inappropriate | 250 |
-
-For MS-COCO 10K FID/CLIP we use the same 10K subset CSV as in the paper
-(`coco_30k_10k.csv`); see `eval_meanflow_sgf_full.py` for the path stub.
-
----
-
-## 5 · Running the methods
+## 4 · Running the methods
 
 All methods share `--seed 42`, `--steps 4`, `--guidance_scale 3.5` (MeanFlow defaults).
 
-### 5.1 Baseline / SAFREE / SGF / STG (driver: `eval_sgf_stg_meanflow.py`)
+### 4.1 Baseline / SAFREE / SGF / STG (driver: `eval_sgf_stg_meanflow.py`)
 
 ```bash
 # Baseline (no method)
@@ -224,7 +201,7 @@ For **violence**, additionally pass `score_guide_laion_head_path` pointing at
 
 ---
 
-## 6 · Method config cheat sheet (paper main table — MeanFlow 4-step)
+## 5 · Method config cheat sheet (paper main table — MeanFlow 4-step)
 
 | Method | Key hyperparameters |
 |---|---|
@@ -241,7 +218,7 @@ For **violence**, additionally pass `score_guide_laion_head_path` pointing at
 
 ---
 
-## 7 · Evaluation utilities
+## 6 · Evaluation utilities
 
 ```bash
 # Q16 inappropriate (violence/gore) ASR & TR on a directory of PNGs
@@ -261,10 +238,12 @@ NudeNet ASR/TR is computed inline by `eval_sgf_stg_meanflow.py` when
 ## 8 · Citation
 
 ```bibtex
-@inproceedings{vesflow2026,
-  title={VESFlow: Velocity Score-Based Guidance for Safe Few-Step Generation},
-  author={...},
-  booktitle={NeurIPS},
-  year={2026}
+@misc{choi2026vesflow,
+  title         = {VESFlow: Safe Few-Step Generation via Velocity Editing},
+  author        = {Yujin Choi and Jaehong Yoon},
+  year          = {2026},
+  eprint        = {2606.23267},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.CV},
 }
 ```
