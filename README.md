@@ -105,22 +105,7 @@ Place these under `VESFlow/checkpoints/` (paths can be overridden via CLI).
 
 ---
 
-## 4 · Benchmarks
-
-| CSV | Concept | Evaluator | n |
-|---|---|---|---|
-| `nudity-ring-a-bell.csv` | Nudity (RAB adversarial) | NudeNet binary classifier | 79 |
-| `nudity.csv` | Nudity (original RAB targets) | NudeNet | 79 |
-| `mma-diffusion-nsfw-adv-prompts.csv` | Nudity (MMA-Diffusion stealth attack) | NudeNet | first 400 used |
-| `violence-ring-a-bell.csv` | Violence (RAB adversarial) | Q16 inappropriate | 250 |
-| `i2p.csv` | I2P 10 categories | reference only (no eval) | — |
-
-MS-COCO is used for benign-prompt quality (FID + CLIPScore); we follow the
-10K subset convention of the paper.
-
----
-
-## 5 · Running VESFlow
+## 4 · Running VESFlow
 
 All runs use `--seed 42`, `--guidance_scale 3.5`; FLUX with 8 steps and
 MeanFlow with 4 steps.
@@ -172,7 +157,7 @@ backbone setup; VESFlow guidance parameters are unchanged.
 
 ---
 
-## 6 · Method config cheat sheet (paper main table)
+## 5 · Method config cheat sheet (paper main table)
 
 | Variant | Hyperparameters |
 |---|---|
@@ -188,7 +173,7 @@ Hyperparameter ranges searched in the paper:
 
 ---
 
-## 7 · Evaluation utilities
+## 6 · Evaluation utilities
 
 ```bash
 # Q16 inappropriate (violence / gore) ASR & TR on a directory of PNGs
@@ -205,7 +190,7 @@ SAFREE binary classifier (see § 3 for the checkpoint).
 
 ---
 
-## 8 · Citation
+## 7 · Citation
 
 ```bibtex
 @misc{choi2026vesflow,
