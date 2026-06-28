@@ -193,9 +193,9 @@ SAFREE binary classifier (see § 3 for the checkpoint).
 ## 7 · Citation
 
 ```bibtex
-@misc{choi2026vesflow,
+@article{choi2026vesflow,
   title         = {Safe Few-Step Generation via Velocity Editing},
-  author        = {Yujin Choi and Jaehong Yoon},
+  author        = {Choi, Yujin and Yoon, Jaehong},
   year          = {2026},
   eprint        = {2606.23267},
   archivePrefix = {arXiv},
