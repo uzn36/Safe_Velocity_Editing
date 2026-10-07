@@ -131,7 +131,7 @@ violence-related `unsafe_concepts`, e.g. `["violence", "bloody", "gore"]`. All
 other hyperparameters stay the same — no category-specific tuning.
 
 For **FLUX (8 steps)**, set `num_inference_steps=8` and use the FLUX-paired
-backbone setup; VESFlow guidance parameters are unchanged.
+backbone setup.
 
 ---
 
