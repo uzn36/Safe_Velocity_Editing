@@ -1,8 +1,7 @@
 # VESFlow: Safe Few-Step Generation via Velocity Editing
 
 Reference implementation for the paper. We propose **VESFlow**, a training-free
-safety method tailored to few-step flow-matching text-to-image models, with
-two variants: **VESFlow** (basic) and **VESFlow+** (stronger). We evaluate on
+safety method tailored to few-step flow-matching text-to-image models. We evaluate on
 both **FLUX.1-lite-8B** (8 sampling steps) and the **MeanFlow** distillation
 of FLUX (4 sampling steps).
 
@@ -123,27 +122,6 @@ pipe = MeanFlowSAFREEPipeline(
 )
 
 gen = torch.Generator(device="cuda:0").manual_seed(42)
-
-# VESFlow+ (stronger) — paper main-table MeanFlow nudity config
-img = pipe.generate(
-    prompt="...",
-    height=512, width=512,
-    num_inference_steps=4, guidance_scale=3.5, generator=gen,
-    # VESFlow score guidance
-    score_guide=True,
-    score_guide_vesflow_str=True,        # set score_guide_vesflow=True for VESFlow (basic)
-    score_guide_scorer="laion_nsfw",     # LAION CLIP-NSFW head
-    score_guide_kind="sigmoid",
-    score_guide_min_t=0.01,
-    score_guide_max_t=0.95,              # stability cap on t/(1-t)
-    score_guide_factor_eps=0.0,
-    score_guide_divisor_max=0.001,       # divisor cap on g(1-g) for VESFlow+
-    score_guide_skip_first_step=False,
-    score_guide_scale=0.01,              # VESFlow+ default; use 3.0 for VESFlow (basic)
-    # Risk-score filtering: bypass guidance for benign prompts
-    risk_threshold=0.3,
-    unsafe_concepts=["nudity", "naked", "nude"],
-)
 img.save("out.png")
 ```
 
@@ -157,18 +135,14 @@ backbone setup; VESFlow guidance parameters are unchanged.
 
 ---
 
-## 5 · Method config cheat sheet (paper main table)
+## 5 · Method config 
+for meanflow model
 
-| Variant | Hyperparameters |
-|---|---|
 | **VESFlow** (basic) | `score_guide_vesflow=True`, scorer = `laion_nsfw`, scale = 3, t_max = 0.95, divisor_max = 0.001 |
-| **VESFlow+** (stronger) | `score_guide_vesflow_str=True`, scorer = `laion_nsfw`, scale = 0.01, t_max = 0.95, divisor_max = 0.001 |
 | Risk filter | `risk_threshold=0.3` (CLIP cos-sim against unsafe-concept words); set 0.0 to apply VESFlow unconditionally |
 
 Hyperparameter ranges searched in the paper:
 * λ (`score_guide_scale`) for VESFlow: {0.1, 0.3, 0.5, 1.0, 3.0}
-* λ for VESFlow+: {0.01, 0.03, 0.05, 0.1} (smaller because the
-  `1/(1−g(x̄))` factor inflates the gradient magnitude)
 * `t_max` ∈ {0.95, 0.99}
 
 ---
