@@ -87,8 +87,7 @@ Place these under `VESFlow/checkpoints/` (paths can be overridden via CLI).
 * **Graphic-harm head** (`laion_trained_graphicharm_clipL.pt`) — our trained
   head following the LAION architecture (CLIP-L/14 features → 4-layer MLP →
   sigmoid). Trained on I2P: positive = {violence, self-harm, shocking},
-  negative = remaining categories. Release link: TODO.
-  Pass to scorer via `score_guide_laion_head_path`.
+  negative = remaining categories. 
 
 ### Required for evaluation
 
